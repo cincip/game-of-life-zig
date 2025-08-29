@@ -1,0 +1,17 @@
+.{
+    .name = .game_of_life,
+    .version = "0.0.0",
+    .fingerprint = 0x2937c9e2bb5bef99,
+    .minimum_zig_version = "0.16.0-dev.27+83f773fc6",
+    .dependencies = .{
+        .raylib_zig = .{
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#df70c5c952f61f84a39cd2af5649f5ad7a645b6f",
+            .hash = "raylib_zig-5.6.0-dev-KE8REH9ABQBo9v5YfUwPYdgihp7NNFOr_2FJOiVJH7bH",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
