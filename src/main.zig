@@ -3,9 +3,12 @@ const rl = @import("raylib");
 const Board = @import("board.zig").Board;
 
 pub fn main() !void {
-    var gpa = std.heap.page_allocator;
-    var board = try Board.init(&gpa, 50, 50, 15);
-    defer board.deinit(&gpa);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var board = try Board.init(allocator, 50, 50, 15);
+    defer board.deinit();
 
     const margin: usize = 10;
     const window_width: i32 = @intCast(board.n_cols * board.cell_size + margin * 2);
@@ -27,7 +30,7 @@ pub fn main() !void {
             const c: usize = (@as(usize, @intFromFloat(mouse.x)) - margin) / board.cell_size;
             const r: usize = (@as(usize, @intFromFloat(mouse.y)) - margin) / board.cell_size;
             if (r < board.n_rows and c < board.n_cols) {
-                board.set(r, c, 1);
+                try board.set(r, c, 1);
             }
         }
         if (rl.isMouseButtonDown(rl.MouseButton.right)) {
@@ -35,12 +38,12 @@ pub fn main() !void {
             const c = (@as(usize, @intFromFloat(mouse.x)) - margin) / board.cell_size;
             const r = (@as(usize, @intFromFloat(mouse.y)) - margin) / board.cell_size;
             if (r < board.n_rows and c < board.n_cols) {
-                board.set(r, c, 0);
+                try board.set(r, c, 0);
             }
         }
 
         if (running) {
-            try board.step(&gpa);
+            try board.step();
         }
 
         rl.beginDrawing();
