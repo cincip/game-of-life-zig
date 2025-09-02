@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub const Pos = struct {
-    row: usize,
-    col: usize,
+    row: isize,
+    col: isize,
 
     pub const HashContext = struct {
         pub fn eql(_: @This(), a: Pos, b: Pos) bool {

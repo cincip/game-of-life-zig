@@ -3,18 +3,14 @@ const rl = @import("raylib");
 const Pos = @import("pos.zig").Pos;
 
 pub const Board = struct {
-    n_rows: usize,
-    n_cols: usize,
-    cell_size: usize,
+    cell_size: isize,
     alive: std.HashMap(Pos, void, Pos.HashContext, std.hash_map.default_max_load_percentage),
     temp: std.HashMap(Pos, void, Pos.HashContext, std.hash_map.default_max_load_percentage),
     neighbour_count: std.HashMap(Pos, u8, Pos.HashContext, std.hash_map.default_max_load_percentage),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, r: usize, c: usize, s: usize) !Board {
+    pub fn init(allocator: std.mem.Allocator, s: isize) !Board {
         return Board{
-            .n_rows = r,
-            .n_cols = c,
             .cell_size = s,
             .alive = std.HashMap(Pos, void, Pos.HashContext, std.hash_map.default_max_load_percentage).init(allocator),
             .temp = std.HashMap(Pos, void, Pos.HashContext, std.hash_map.default_max_load_percentage).init(allocator),
@@ -33,7 +29,7 @@ pub const Board = struct {
         return self.alive.contains(Pos{ .row = r, .col = c });
     }
 
-    pub fn set(self: *Board, r: usize, c: usize, val: u8) !void {
+    pub fn set(self: *Board, r: isize, c: isize, val: u8) !void {
         const pos = Pos{ .row = r, .col = c };
         if (val == 1) {
             try self.alive.put(pos, {});
@@ -42,18 +38,9 @@ pub const Board = struct {
         }
     }
 
-    pub fn draw(self: *Board, margin: usize) void {
-        for (0..self.n_rows) |r| {
-            for (0..self.n_cols) |c| {
-                const x: i32 = @intCast(margin + c * self.cell_size);
-                const y: i32 = @intCast(margin + r * self.cell_size);
-                rl.drawRectangle(x, y, @intCast(self.cell_size), @intCast(self.cell_size), .ray_white);
-                rl.drawRectangleLines(x, y, @intCast(self.cell_size), @intCast(self.cell_size), .light_gray);
-            }
-        }
-
+    pub fn draw(self: *Board, margin: isize) void {
         var iter = self.alive.iterator();
-        while(iter.next()) |cell| {
+        while (iter.next()) |cell| {
             const pos = cell.key_ptr.*;
             const x: i32 = @intCast(margin + pos.col * self.cell_size);
             const y: i32 = @intCast(margin + pos.row * self.cell_size);
@@ -61,6 +48,43 @@ pub const Board = struct {
         }
     }
 
+    pub fn drawGrid(self: *Board, camera: rl.Camera2D, margin: isize, screen_width: i32, screen_height: i32) void {
+        const top_left = rl.getScreenToWorld2D(.{ .x = 0, .y = 0 }, camera);
+        const bottom_right = rl.getScreenToWorld2D(.{ .x = @floatFromInt(screen_width), .y = @floatFromInt(screen_height) }, camera);
+
+        const cell_size = self.cell_size;
+
+        // TODO: find a better way of writing this kind of stuff
+        const start_x = @divFloor(
+            @as(isize, @intFromFloat(top_left.x - @as(f64, @floatFromInt(margin)))),
+            cell_size,
+        ) * cell_size + margin;
+
+        const end_x = @divFloor(
+            @as(isize, @intFromFloat(bottom_right.x - @as(f64, @floatFromInt(margin)))),
+            cell_size,
+        ) * cell_size + margin;
+
+        const start_y = @divFloor(
+            @as(isize, @intFromFloat(top_left.y - @as(f64, @floatFromInt(margin)))),
+            cell_size,
+        ) * cell_size + margin;
+
+        const end_y = @divFloor(
+            @as(isize, @intFromFloat(bottom_right.y - @as(f64, @floatFromInt(margin)))),
+            cell_size,
+        ) * cell_size + margin;
+
+        var x = start_x;
+        while (x <= end_x) : (x += cell_size) {
+            rl.drawLine(@intCast(x), @intCast(start_y), @intCast(x), @intCast(end_y), .light_gray);
+        }
+
+        var y = start_y;
+        while (y <= end_y) : (y += cell_size) {
+            rl.drawLine(@intCast(start_x), @intCast(y), @intCast(end_x), @intCast(y), .light_gray);
+        }
+    }
     pub fn step(self: *Board) !void {
         self.neighbour_count.clearRetainingCapacity();
         self.temp.clearRetainingCapacity();
@@ -68,20 +92,16 @@ pub const Board = struct {
         var iter = self.alive.iterator();
         while (iter.next()) |cell| {
             const pos = cell.key_ptr.*;
-            const offsets = [_]i2{-1, 0, 1};
+            const offsets = [_]i2{ -1, 0, 1 };
             for (offsets) |dr| {
                 for (offsets) |dc| {
                     if (dr == 0 and dc == 0) continue;
                     const nr = @as(isize, @intCast(pos.row)) + dr;
                     const nc = @as(isize, @intCast(pos.col)) + dc;
 
-                    if (nr >= 0 and nr < @as(isize, @intCast(self.n_rows)) and
-                            nc >= 0 and nc < @as(isize, @intCast(self.n_cols)))
-                    {
-                        const neighbour_pos = Pos{ .row = @intCast(nr), .col = @intCast(nc) };
-                        const curr_count = self.neighbour_count.get(neighbour_pos) orelse 0;
-                        try self.neighbour_count.put(neighbour_pos, curr_count + 1);
-                    }
+                    const neighbour_pos = Pos{ .row = @intCast(nr), .col = @intCast(nc) };
+                    const curr_count = self.neighbour_count.get(neighbour_pos) orelse 0;
+                    try self.neighbour_count.put(neighbour_pos, curr_count + 1);
                 }
             }
         }

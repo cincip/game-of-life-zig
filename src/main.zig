@@ -7,12 +7,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var board = try Board.init(allocator, 50, 50, 20);
+    var board = try Board.init(allocator, 20);
     defer board.deinit();
 
-    const margin: usize = 10;
-    const window_width: i32 = @intCast(board.n_cols * board.cell_size + margin * 2);
-    const window_height: i32 = @intCast(board.n_rows * board.cell_size + margin * 2);
+    const margin: isize = 10;
+    const window_width: i32 = 1000;
+    const window_height: i32 = 1000;
 
     rl.initWindow(window_width, window_height, "Game of Life");
     defer rl.closeWindow();
@@ -31,6 +31,7 @@ pub fn main() !void {
 
     var dragging = false;
     var drag_start = rl.Vector2{ .x = 0, .y = 0 };
+    var show_grid = true;
 
     while (!rl.windowShouldClose()) {
         const time = rl.getTime();
@@ -40,24 +41,30 @@ pub fn main() !void {
             running = !running;
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.up)) {
-            speed += 1;
+        if (rl.isKeyDown(rl.KeyboardKey.up)) {
+            speed += 0.1;
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.down)) {
-            speed -= 1;
+        if (rl.isKeyDown(rl.KeyboardKey.down)) {
+            speed -= 0.1;
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.r)) {
             speed = 15;
         }
 
+        if (rl.isKeyPressed(rl.KeyboardKey.g)) {
+            show_grid = !show_grid;
+        }
+
         if (rl.isMouseButtonDown(rl.MouseButton.left)) {
             const mouse_world = rl.getScreenToWorld2D(rl.getMousePosition(), camera);
-            const c: usize = @as(usize, @intFromFloat(mouse_world.x - margin)) / board.cell_size;
-            const r: usize = @as(usize, @intFromFloat(mouse_world.y - margin)) / board.cell_size;
-            if (r < board.n_rows and c < board.n_cols) {
-                try board.set(r, c, 1);
+            const c = @divTrunc(@as(isize, @intFromFloat(mouse_world.x - margin)), @as(isize, @intCast(board.cell_size))); // Did not know divTrunc could work like this
+            const r = @divTrunc(@as(isize, @intFromFloat(mouse_world.y - margin)), @as(isize, @intCast(board.cell_size)));
+            if (rl.isKeyDown(rl.KeyboardKey.left_control) or rl.isKeyDown(rl.KeyboardKey.right_control)) {
+                try board.set(@intCast(r), @intCast(c), 0);
+            } else {
+                try board.set(@intCast(r), @intCast(c), 1);
             }
         }
 
@@ -113,13 +120,49 @@ pub fn main() !void {
             camera.begin();
             defer camera.end();
 
+            if (show_grid) {
+                board.drawGrid(camera, margin, window_width, window_height);
+            }
+
             board.draw(margin);
         }
 
-        rl.drawText(if (running) "Running (SPACE to pause)" else "Paused (SPACE to run)", 10, 10, 20, .dark_gray);
+        const line_height = 26;
+        var y: i32 = 10;
 
+        rl.drawText(
+            if (running) "Running (SPACE to pause)" else "Paused (SPACE to run)",
+            10,
+            y,
+            24,
+            .dark_gray,
+        );
+
+        y += line_height;
+        rl.drawText(
+            if (show_grid) "Showing grid (G to stop showing grid)" else "Not showing the grid (G to show the grid)",
+            10,
+            y,
+            24,
+            .dark_gray,
+        );
+
+        y += line_height;
         var speed_buffer: [64]u8 = undefined;
-        const speed_text = try std.fmt.bufPrintZ(&speed_buffer, "Speed: {d:.1} steps/sec (UP and DOWN to adjust, R to reset)", .{speed}); // LOL ChatGPT is the GOAT for this one
-        rl.drawText(@ptrCast(speed_text), 10, 35, 16, .dark_gray);
+        const speed_text = try std.fmt.bufPrintZ(
+            &speed_buffer,
+            "Speed: {d:.1} steps/sec (UP/DOWN to adjust, R to reset)",
+            .{speed},
+        );
+        rl.drawText(@ptrCast(speed_text), 10, y, 24, .dark_gray);
+
+        y += line_height;
+        rl.drawText(
+            "Left click to select, Ctrl+Click to unselect",
+            10,
+            y,
+            24,
+            .dark_gray,
+        );
     }
 }
