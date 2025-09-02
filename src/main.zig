@@ -7,7 +7,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var board = try Board.init(allocator, 50, 50, 15);
+    var board = try Board.init(allocator, 50, 50, 20);
     defer board.deinit();
 
     const margin: usize = 10;
@@ -21,6 +21,16 @@ pub fn main() !void {
     var running = false;
     var speed: f64 = 15;
     var last_time: f64 = 0;
+
+    var camera = rl.Camera2D{
+        .target = .{ .x = 0, .y = 0 },
+        .offset = .{ .x = 0, .y = 0 },
+        .zoom = 1,
+        .rotation = 0,
+    };
+
+    var dragging = false;
+    var drag_start = rl.Vector2{ .x = 0, .y = 0 };
 
     while (!rl.windowShouldClose()) {
         const time = rl.getTime();
@@ -43,20 +53,33 @@ pub fn main() !void {
         }
 
         if (rl.isMouseButtonDown(rl.MouseButton.left)) {
-            const mouse = rl.getMousePosition();
-            const c: usize = (@as(usize, @intFromFloat(mouse.x)) - margin) / board.cell_size;
-            const r: usize = (@as(usize, @intFromFloat(mouse.y)) - margin) / board.cell_size;
+            const mouse_world = rl.getScreenToWorld2D(rl.getMousePosition(), camera);
+            const c: usize = @as(usize, @intFromFloat(mouse_world.x - margin)) / board.cell_size;
+            const r: usize = @as(usize, @intFromFloat(mouse_world.y - margin)) / board.cell_size;
             if (r < board.n_rows and c < board.n_cols) {
                 try board.set(r, c, 1);
             }
         }
-        if (rl.isMouseButtonDown(rl.MouseButton.right)) {
+
+        if (rl.isMouseButtonPressed(rl.MouseButton.right)) {
+            dragging = true;
+            drag_start = rl.getMousePosition();
+        }
+
+        if (rl.isMouseButtonReleased(rl.MouseButton.right)) {
+            dragging = false;
+        }
+
+        if (dragging) {
             const mouse = rl.getMousePosition();
-            const c = (@as(usize, @intFromFloat(mouse.x)) - margin) / board.cell_size;
-            const r = (@as(usize, @intFromFloat(mouse.y)) - margin) / board.cell_size;
-            if (r < board.n_rows and c < board.n_cols) {
-                try board.set(r, c, 0);
-            }
+
+            const prev_world = rl.getScreenToWorld2D(drag_start, camera);
+            const curr_world = rl.getScreenToWorld2D(mouse, camera);
+
+            camera.target.x += (prev_world.x - curr_world.x);
+            camera.target.y += (prev_world.y - curr_world.y);
+
+            drag_start = mouse;
         }
 
         if (running and (time - last_time) >= inv_speed) {
@@ -64,11 +87,35 @@ pub fn main() !void {
             last_time = time;
         }
 
+        {
+            const wheel = rl.getMouseWheelMove();
+            if (wheel != 0) {
+                const screenToWorld = rl.getScreenToWorld2D(rl.getMousePosition(), camera);
+
+                camera.offset = rl.getMousePosition();
+                camera.target = screenToWorld;
+
+                var scaleFactor = 1 + (0.5 * @abs(wheel));
+                if (wheel < 0) {
+                    scaleFactor = 1 / scaleFactor;
+                }
+
+                camera.zoom = rl.math.clamp(camera.zoom * scaleFactor, 0.125, 64);
+            }
+        }
+
         rl.beginDrawing();
         defer rl.endDrawing();
 
         rl.clearBackground(.ray_white);
-        board.draw(margin);
+
+        {
+            camera.begin();
+            defer camera.end();
+
+            board.draw(margin);
+        }
+
         rl.drawText(if (running) "Running (SPACE to pause)" else "Paused (SPACE to run)", 10, 10, 20, .dark_gray);
 
         var speed_buffer: [64]u8 = undefined;
